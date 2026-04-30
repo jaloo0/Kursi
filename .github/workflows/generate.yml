@@ -1,0 +1,94 @@
+name: Generate Course Content
+
+on:
+  workflow_dispatch:
+    inputs:
+      session_type:
+        description: 'Session type: start_fresh or resume'
+        required: true
+        default: 'resume'
+        type: choice
+        options:
+          - start_fresh
+          - resume
+
+concurrency:
+  group: course-generation
+  cancel-in-progress: false   # Never cancel a running session
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 58       # Hard GitHub limit — our script exits at 50 min
+
+    permissions:
+      contents: write         # Needed to commit generated content
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 1
+
+      # ── 2. Git identity ──────────────────────────────────────────────────────
+      - name: Configure Git
+        run: |
+          git config user.name  "Kursi AI Bot"
+          git config user.email "kursi-bot@users.noreply.github.com"
+
+      # ── 3. Python setup ──────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # ── 4. System deps for WeasyPrint ────────────────────────────────────────
+      - name: Install WeasyPrint system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libpango-1.0-0 \
+            libpangoft2-1.0-0 \
+            libharfbuzz0b \
+            libffi-dev \
+            libjpeg-dev \
+            libopenjp2-7
+
+      # ── 5. Python packages ───────────────────────────────────────────────────
+      - name: Install Python dependencies
+        run: pip install --quiet -r requirements.txt
+
+      # ── 6. Create required directories ───────────────────────────────────────
+      - name: Ensure directories exist
+        run: |
+          mkdir -p content output state input prompts
+
+      # ── 7. Run AI Controller (the main brain) ────────────────────────────────
+      - name: Run AI Controller
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          HF_TOKEN:       ${{ secrets.HF_TOKEN }}
+          GH_PAT:         ${{ secrets.GH_PAT }}
+          REPO_OWNER:     ${{ github.repository_owner }}
+          REPO_NAME:      ${{ github.event.repository.name }}
+          SESSION_TYPE:   ${{ github.event.inputs.session_type }}
+        run: python scripts/ai_controller.py
+
+      # ── 8. Verify state committed ────────────────────────────────────────────
+      - name: Show final progress
+        if: always()
+        run: |
+          echo "=== Final state.json ==="
+          cat state/state.json | python3 -c "
+          import json, sys
+          s = json.load(sys.stdin)
+          prog = s.get('sections', [])
+          done = sum(1 for x in prog if x.get('status') == 'done')
+          total = len(prog)
+          print(f'Status: {s.get(\"status\", \"unknown\")}')
+          print(f'Progress: {done}/{total} sections')
+          print(f'PDF ready: {s.get(\"pdf_ready\", False)}')
+          " || echo "Could not read state.json"

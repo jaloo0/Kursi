@@ -1,0 +1,18 @@
+{
+  "course_title": "",
+  "status": "idle",
+  "outline_raw": "",
+  "sections": [],
+  "current_index": 0,
+  "total_sections": 0,
+  "context_window": [],
+  "api_stats": {
+    "total_api_calls": 0,
+    "total_tokens": 0,
+    "sessions_count": 0
+  },
+  "sessions": [],
+  "last_updated": "",
+  "pdf_ready": false,
+  "pdf_path": ""
+}
