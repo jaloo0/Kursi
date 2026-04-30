@@ -256,12 +256,13 @@ def _build_cover(state: Dict) -> str:
         if s.get("status") == "done"
     )
     generated   = datetime.utcnow().strftime("%B %d, %Y")
+    num_weeks = len(set(s["week"] for s in state.get("sections", [])))
     return f"""
 <div class="cover">
     <div class="cover-badge">📚 Course Textbook</div>
     <h1>{title}</h1>
     <div class="cover-divider"></div>
-    <div class="cover-subtitle">A Comprehensive {len(set(s['week'] for s in state.get('sections', [])))} ‑Week Course</div>
+    <div class="cover-subtitle">A Comprehensive {num_weeks} ‑Week Course</div>
     <div class="cover-meta">
         {total} topics · ~{total_words:,} words · Generated {generated}<br>
         Created with Kursi AI Course Generator
@@ -271,17 +272,22 @@ def _build_cover(state: Dict) -> str:
 
 
 def _build_toc(state: Dict) -> str:
-    sections    = state.get("sections", [])
-    lines       = ['<div class="toc"><h2>📋 Table of Contents</h2>']
+    sections     = state.get("sections", [])
+    lines        = ['<div class="toc"><h2>📋 Table of Contents</h2>']
+    indent       = '&nbsp;' * 4   # pre-computed — avoids same-quote conflict in f-string (Python 3.11)
     current_week = 0
     for s in sections:
         if s["week"] != current_week:
             current_week = s["week"]
+            week_num   = s["week"]
+            week_title = s["week_title"]
             lines.append(
-                f'<div class="toc-week">Week {s["week"]}: {s["week_title"]}</div>'
+                f'<div class="toc-week">Week {week_num}: {week_title}</div>'
             )
+        topic_idx   = s["topic_index"]
+        topic_title = s["title"]
         lines.append(
-            f'<div class="toc-topic">{'&nbsp;' * 4}{s["topic_index"]}. {s["title"]}</div>'
+            f'<div class="toc-topic">{indent}{topic_idx}. {topic_title}</div>'
         )
     lines.append("</div>")
     return "\n".join(lines)
